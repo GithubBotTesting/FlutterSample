@@ -5,6 +5,7 @@ import 'package:dormlink/services/user_service.dart';
 import 'package:dormlink/services/roommate_request_service.dart';
 import 'package:dormlink/services/chat_service.dart';
 import 'package:dormlink/screens/main_screen.dart';
+import 'package:dormlink/screens/login_screen.dart';
 
 void main() {
   runApp(const MyApp());
@@ -59,7 +60,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     await Future.delayed(const Duration(seconds: 2));
     if (mounted) {
       Navigator.pushReplacement(context, PageRouteBuilder(
-        pageBuilder: (_, __, ___) => const MainScreen(),
+        pageBuilder: (_, __, ___) => const LoginScreen(),
         transitionsBuilder: (_, animation, __, child) => FadeTransition(opacity: animation, child: child),
         transitionDuration: const Duration(milliseconds: 500),
       ));
