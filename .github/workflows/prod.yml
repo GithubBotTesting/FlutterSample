@@ -1,4 +1,4 @@
-name: Stage Deploy Android & IOS
+name: Production Deploy Android & IOS
 
 on:
   push:
@@ -7,6 +7,8 @@ on:
     # so we ignore pushes that ONLY modify pubspec.yaml
     paths-ignore:
       - "pubspec.yaml"
+      - ".github/workflows/prod.yml"
+      - ".github/workflows/stage.yml"
 
 permissions:
   contents: write
