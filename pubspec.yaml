@@ -1,7 +1,7 @@
 name: dormlink
 description: "Find your perfect study buddy and co-habitant with this vibrant app, connecting KFUPM students to compatible roommates through intelligent matching, direct chat, and seamless university portal integration."
 publish_to: "none"
-version: 1.0.0
+version: 1.0.1
 
 environment:
   sdk: ^3.6.0
