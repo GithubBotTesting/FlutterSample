@@ -1,1 +1,149 @@
+name: Stage Deploy Android & IOS
 
+on:
+  push:
+    branches: [ main ]
+    # Prevent infinite loop: the bot push only changes pubspec.yaml
+    # so we ignore pushes that ONLY modify pubspec.yaml
+    paths-ignore:
+      - "pubspec.yaml"
+
+permissions:
+  contents: write
+
+jobs:
+  increment:
+    name: "Increment Version"
+    runs-on: ubuntu-latest
+
+    outputs:
+      new_sha: ${{ steps.set_sha.outputs.new_sha }}
+
+    steps:
+      - name: Checkout code (full history for pushing)
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Increment version code and name
+        run: ./increment.sh
+
+      - name: Commit and push version bump (pubspec.yaml)
+        run: |
+          if git diff --quiet pubspec.yaml; then
+            echo "No changes in pubspec.yaml, skipping commit."
+            exit 0
+          fi
+
+          git config user.name "github-actions[bot]"
+          git config user.email "github-actions[bot]@users.noreply.github.com"
+
+          git add pubspec.yaml
+          git commit -m "chore: bump version"
+          git push origin HEAD:main
+
+      - name: Set output SHA (latest main)
+        id: set_sha
+        run: |
+          git fetch origin main
+          git checkout main
+          echo "new_sha=$(git rev-parse HEAD)" >> $GITHUB_OUTPUT
+
+  android-build:
+    name: "Build Android AAB"
+    runs-on: ubuntu-latest
+    needs: increment
+
+    steps:
+      - name: Checkout bumped commit
+        uses: actions/checkout@v4
+        with:
+          ref: ${{ needs.increment.outputs.new_sha }}
+
+      - name: Set up Flutter
+        uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          flutter-version-file: pubspec.yaml
+
+      - name: Install dependencies
+        run: flutter pub get
+
+      # Signing setup
+      - name: Decode keystore
+        run: |
+          mkdir -p android/app
+          echo "${{ secrets.APP_KEYSTORE_BASE64 }}" | base64 --decode > android/app/upload-keystore.jks
+          ls -l android/app/upload-keystore.jks
+
+      - name: Create key.properties
+        run: |
+          cat > android/key.properties <<'EOF'
+          storePassword=${{ secrets.APP_KEY_PASSWORD }}
+          keyPassword=${{ secrets.APP_KEY_PASSWORD }}
+          keyAlias=${{ secrets.APP_KEY_ALIAS }}
+          storeFile=upload-keystore.jks
+          EOF
+
+      - name: Build App Bundle (release)
+        run: flutter build appbundle --release
+
+      - name: Verify AAB signature
+        run: |
+          jarsigner -verify -verbose -certs build/app/outputs/bundle/release/app-release.aab | head -n 50
+
+      - name: Upload AAB artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: aab
+          path: build/app/outputs/bundle/release/app-release.aab
+
+  android-internal:
+    name: "Upload to Internal testing"
+    runs-on: ubuntu-latest
+    needs: android-build
+
+    steps:
+      - name: Download AAB artifact
+        uses: actions/download-artifact@v4
+        with:
+          name: aab
+          path: .
+
+      - name: Upload to Play Console (Internal testing)
+        uses: r0adkll/upload-google-play@v1
+        with:
+          serviceAccountJsonPlainText: ${{ secrets.APP_SERVICE_ACCOUNT_JSON }}
+          packageName: com.example.swe463_project
+          releaseFiles: app-release.aab
+          track: internal
+          status: completed
+
+#  ios:
+#    name: Build iOS (no code signing)
+#    runs-on: macos-latest
+#
+#    steps:
+#      - name: Checkout
+#        uses: actions/checkout@v4
+#
+#      - name: Set up Flutter
+#        uses: subosito/flutter-action@v2
+#        with:
+#          channel: stable
+#          flutter-version-file: pubspec.yaml
+#
+#      - run: flutter --version
+#
+#      - name: Install dependencies
+#        run: flutter pub get
+#
+#      - name: Build iOS (release, unsigned)
+#        run: flutter build ios --release --no-codesign
+#
+#      - name: Upload iOS artifact (app bundle folder)
+#        uses: actions/upload-artifact@v4
+#        with:
+#          name: ios-build
+#          path: |
+#            build/ios/iphoneos
